@@ -1,0 +1,374 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Know Win - Türkçe Dilbilgisi</title>
+    <style>
+        body {
+            background-color: #f28c38;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        #game-container {
+            text-align: center;
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        #wheel-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            margin: 0 auto;
+        }
+        #wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: relative;
+            transition: transform 3s ease-out;
+        }
+        #wheel-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 2.5em;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        #pointer {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 40px solid #333;
+            z-index: 10;
+        }
+        .topic-label {
+            position: absolute;
+            color: white;
+            font-size: 1em;
+            font-weight: bold;
+            text-align: center;
+            width: 100px;
+            transform-origin: center;
+        }
+        #question-container {
+            margin-top: 20px;
+            color: white;
+            font-size: 1.5em;
+        }
+        .question {
+            margin: 10px 0;
+            font-size: 2em;
+            font-weight: bold;
+        }
+        .option {
+            background: #333;
+            color: white;
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .option:hover {
+            background: #555;
+        }
+        #timer {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 3em;
+            font-weight: bold;
+        }
+        #score {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            color: white;
+            font-size: 2em;
+        }
+        .fade {
+            animation: fade 0.5s ease-in-out;
+        }
+        @keyframes fade {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        #start-button {
+            background: #333;
+            color: white;
+            padding: 15px 30px;
+            font-size: 1.5em;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background 0.3s;
+        }
+        #start-button:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="wheel-container">
+            <canvas id="wheel" width="400" height="400"></canvas>
+            <div id="wheel-text">Know Win</div>
+            <div id="pointer"></div>
+        </div>
+        <button id="start-button">Çarkı Çevir</button>
+        <div id="question-container"></div>
+        <div id="timer">15</div>
+        <div id="score">Doğru: 0/10</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('wheel');
+        const ctx = canvas.getContext('2d');
+        const startButton = document.getElementById('start-button');
+        const questionContainer = document.getElementById('question-container');
+        const timerDisplay = document.getElementById('timer');
+        const scoreDisplay = document.getElementById('score');
+
+        const topics = ['Sözcükte Anlam', 'Fiilimsiler', 'Cümlenin Öğeleri', 'Fiil Çatısı'];
+        const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ce82'];
+        const questions = {
+            'Sözcükte Anlam': [
+                { q: "'Berrak' kelimesinin anlamı nedir?", o: ["Temiz, saydam", "Koyu, bulanık", "Sert, katı", "Hızlı, acele"], a: "Temiz, saydam" },
+                { q: "Hangi kelime 'üzüntü' anlamı taşır?", o: ["Hüzün", "Sevinç", "Neşe", "Mutluluk"], a: "Hüzün" },
+                { q: "'Hızlı' kelimesinin zıt anlamlısı nedir?", o: ["Yavaş", "Çabuk", "Acele", "Süratli"], a: "Yavaş" },
+                { q: "'Kısaca' kelimesi hangi anlamda kullanılır?", o: ["Özetle", "Uzun uzun", "Derinlemesine", "Ayrıntılı"], a: "Özetle" },
+                { q: "Hangi kelime 'başlangıç' anlamındadır?", o: ["Giriş", "Son", "Orta", "Bitiş"], a: "Giriş" },
+                { q: "'Sakin' kelimesinin eş anlamlısı nedir?", o: ["Huzurlu", "Hareketli", "Telaşlı", "Gürültülü"], a: "Huzurlu" },
+                { q: "'Fakir' kelimesinin zıt anlamlısı nedir?", o: ["Zengin", "Yoksul", "Muhtaç", "Dar"], a: "Zengin" },
+                { q: "'Hafif' kelimesi hangi anlamda kullanılmaz?", o: ["Ağır", "Yumuşak", "Az", "İnce"], a: "Ağır" },
+                { q: "Hangi kelime 'güven' anlamı taşır?", o: ["Emniyet", "Tehlike", "Korku", "Şüphe"], a: "Emniyet" },
+                { q: "'Geçici' kelimesinin zıt anlamlısı nedir?", o: ["Kalıcı", "Anlık", "Kısa", "Süreli"], a: "Kalıcı" }
+            ],
+            'Fiilimsiler': [
+                { q: "Hangi kelime fiilimsi değildir?", o: ["Koşu", "Koşarak", "Koşma", "Koşuş"], a: "Koşu" },
+                { q: "'Bakış' kelimesi hangi fiilimsi türüdür?", o: ["İsim-fiil", "Sıfat-fiil", "Zarf-fiil", "Hiçbiri"], a: "İsim-fiil" },
+                { q: "'Gülerek' kelimesi hangi fiilimsi türüdür?", o: ["Zarf-fiil", "İsim-fiil", "Sıfat-fiil", "Fiil"], a: "Zarf-fiil" },
+                { q: "Hangi fiilimsi cümleye sıfat anlamı katar?", o: ["Sıfat-fiil", "İsim-fiil", "Zarf-fiil", "Fiil"], a: "Sıfat-fiil" },
+                { q: "'Okuyuş' hangi tür fiilimsidir?", o: ["İsim-fiil", "Sıfat-fiil", "Zarf-fiil", "Fiil"], a: "İsim-fiil" },
+                { q: "'Sevilen' kelimesi hangi fiilimsi türüdür?", o: ["Sıfat-fiil", "İsim-fiil", "Zarf-fiil", "Fiil"], a: "Sıfat-fiil" },
+                { q: "Hangi ek zarf-fiil oluşturur?", o: ["-ken", "-mek", "-miş", "-lık"], a: "-ken" },
+                { q: "'Yazarken' kelimesi hangi fiilimsi türüdür?", o: ["Zarf-fiil", "İsim-fiil", "Sıfat-fiil", "Fiil"], a: "Zarf-fiil" },
+                { q: "'Anlatım' hangi fiilimsi türüdür?", o: ["İsim-fiil", "Sıfat-fiil", "Zarf-fiil", "Fiil"], a: "İsim-fiil" },
+                { q: "Hangi kelime sıfat-fiil örneğidir?", o: ["Gören", "Görme", "Görerek", "Görüş"], a: "Gören" }
+            ],
+            'Cümlenin Öğeleri': [
+                { q: "'Ali koşuyor.' cümlesinde yüklem nedir?", o: ["Koşuyor", "Ali", "Hızlı", "Yok"], a: "Koşuyor" },
+                { q: "'Kitabı masaya koydum.' cümlesinde nesne nedir?", o: ["Kitabı", "Masaya", "Koydum", "Yok"], a: "Kitabı" },
+                { q: "'Bahçede oynayan çocuklar' cümlesinde özne kimdir?", o: ["Çocuklar", "Bahçede", "Oynayan", "Yok"], a: "Çocuklar" },
+                { q: "'Dün akşam yemek yedik.' cümlesinde zarf tümleci nedir?", o: ["Dün akşam", "Yemek", "Yedik", "Yok"], a: "Dün akşam" },
+                { q: "'Mektubu yazarken ağladı.' cümlesinde yüklem nedir?", o: ["Ağladı", "Yazarken", "Mektubu", "Yok"], a: "Ağladı" },
+                { q: "'Ankara’ya trenle gittik.' cümlesinde dolaylı tümleç nedir?", o: ["Ankara’ya", "Trenle", "Gittik", "Yok"], a: "Ankara’ya" },
+                { q: "'Kedi süt içti.' cümlesinde nesne nedir?", o: ["Süt", "Kedi", "İçti", "Yok"], a: "Süt" },
+                { q: "'Hızla koşan atlet' cümlesinde özne nedir?", o: ["Atlet", "Hızla", "Koşan", "Yok"], a: "Atlet" },
+                { q: "'Sabah erkenden kalktım.' cümlesinde zarf tümleci nedir?", o: ["Sabah erkenden", "Kalktım", "Yok", "Erkenden"], a: "Sabah erkenden" },
+                { q: "'Çiçekleri suladı.' cümlesinde nesne nedir?", o: ["Çiçekleri", "Suladı", "Yok", "Bahçede"], a: "Çiçekleri" }
+            ],
+            'Fiil Çatısı': [
+                { q: "'Kırıldı' fiili hangi çatıdadır?", o: ["Etken", "Edilgen", "Dönüşlü", "İşteş"], a: "Edilgen" },
+                { q: "'Taranıyor' fiili hangi çatıdadır?", o: ["Dönüşlü", "Etken", "Edilgen", "İşteş"], a: "Dönüşlü" },
+                { q: "'Görüştük' fiili hangi çatıdadır?", o: ["İşteş", "Etken", "Edilgen", "Dönüşlü"], a: "İşteş" },
+                { q: "'Yazdı' fiili hangi çatıdadır?", o: ["Etken", "Edilgen", "Dönüşlü", "İşteş"], a: "Etken" },
+                { q: "'Sevindi' fiili hangi çatıdadır?", o: ["Dönüşlü", "Etken", "Edilgen", "İşteş"], a: "Etken" },
+                { q: "'Temizlendi' fiili hangi çatıdadır?", o: ["Edilgen", "Etken", "Dönüşlü", "İşteş"], a: "Edilgen" },
+                { q: "'Buluşuyorlar' fiili hangi çatıdadır?", o: ["İşteş", "Etken", "Edilgen", "Dönüşlü"], a: "İşteş" },
+                { q: "'Giyindi' fiili hangi çatıdadır?", o: ["Dönüşlü", "Etken", "Edilgen", "İşteş"], a: "Dönüşlü" },
+                { q: "'Okundu' fiili hangi çatıdadır?", o: ["Edilgen", "Etken", "Dönüşlü", "İşteş"], a: "Edilgen" },
+                { q: "'Koştu' fiili hangi çatıdadır?", o: ["Etken", "Edilgen", "Dönüşlü", "İşteş"], a: "Etken" }
+            ]
+        };
+
+        let currentTopic = '';
+        let currentQuestions = [];
+        let currentQuestionIndex = 0;
+        let correctAnswers = 0;
+        let timeLeft = 15;
+        let timerInterval = null;
+        let usedQuestionIndices = [];
+
+        const correctSound = new Audio('https://www.soundjay.com/buttons/beep-01a.mp3');
+        const wrongSound = new Audio('https://www.soundjay.com/buttons/beep-02.mp3');
+        const tickSound = new Audio('https://www.soundjay.com/clock/tick-tock-01.mp3');
+
+        function drawWheel() {
+            const radius = canvas.width / 2;
+            const anglePerSection = (2 * Math.PI) / topics.length;
+
+            for (let i = 0; i < topics.length; i++) {
+                ctx.beginPath();
+                ctx.moveTo(radius, radius);
+                ctx.arc(radius, radius, radius, i * anglePerSection, (i + 1) * anglePerSection);
+                ctx.fillStyle = colors[i];
+                ctx.fill();
+                ctx.closePath();
+
+                ctx.save();
+                ctx.translate(radius, radius);
+                ctx.rotate(i * anglePerSection + anglePerSection / 2);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(topics[i], 100, 0);
+                ctx.restore();
+            }
+        }
+
+        drawWheel();
+
+        startButton.addEventListener('click', spinWheel);
+
+        function spinWheel() {
+            startButton.disabled = true;
+            const randomDegree = Math.floor(Math.random() * 360) + 720;
+            canvas.style.transform = `rotate(${randomDegree}deg)`;
+
+            setTimeout(() => {
+                const topicIndex = Math.floor(((randomDegree % 360) / 360) * topics.length);
+                currentTopic = topics[topicIndex];
+                selectQuestions();
+                displayQuestion();
+                startButton.style.display = 'none';
+            }, 3000);
+        }
+
+        function selectQuestions() {
+            usedQuestionIndices = [];
+            currentQuestions = [];
+            const availableQuestions = [...questions[currentTopic]];
+            for (let i = 0; i < 10; i++) {
+                const randomIndex = Math.floor(Math.random() * availableQuestions.length);
+                currentQuestions.push(availableQuestions.splice(randomIndex, 1)[0]);
+            }
+        }
+
+        function displayQuestion() {
+            if (currentQuestionIndex >= currentQuestions.length) {
+                endGame();
+                return;
+            }
+
+            const question = currentQuestions[currentQuestionIndex];
+            questionContainer.innerHTML = `
+                <div class="question fade">${question.q}</div>
+                ${question.o.map((option, index) => `
+                    <div class="option" onclick="checkAnswer('${option}', '${question.a}')">${option}</div>
+                `).join('')}
+            `;
+            timeLeft = 15;
+            timerDisplay.textContent = timeLeft;
+            startTimer();
+        }
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.textContent = timeLeft;
+                tickSound.play().catch(() => {});
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    wrongSound.play().catch(() => {});
+                    currentQuestionIndex++;
+                    displayQuestion();
+                }
+            }, 1000);
+        }
+
+        function checkAnswer(selected, correct) {
+            clearInterval(timerInterval);
+            if (selected === correct) {
+                correctSound.play().catch(() => {});
+                correctAnswers++;
+                timeLeft += 5;
+                if (timeLeft < 0) timeLeft = 0;
+            } else {
+                wrongSound.play().catch(() => {});
+                timeLeft -= 5;
+                if (timeLeft < 0) timeLeft = 0;
+            }
+            scoreDisplay.textContent = `Doğru: ${correctAnswers}/${currentQuestions.length}`;
+            currentQuestionIndex++;
+            setTimeout(displayQuestion, 500);
+        }
+
+        function endGame() {
+            clearInterval(timerInterval);
+            questionContainer.innerHTML = `
+                <div class="question fade">Oyun Bitti!</div>
+                <div class="question">Skor: ${correctAnswers}/${currentQuestions.length}</div>
+            `;
+            timerDisplay.style.display = 'none';
+            scoreDisplay.style.display = 'none';
+            startButton.style.display = 'block';
+            startButton.textContent = 'Tekrar Oyna';
+            startButton.disabled = false;
+            currentQuestionIndex = 0;
+            correctAnswers = 0;
+            scoreDisplay.textContent = `Doğru: 0/10`;
+            timerDisplay.style.display = 'block';
+            scoreDisplay.style.display = 'block';
+            canvas.style.transform = 'rotate(0deg)';
+        }
+    </script>
+</body>
+</html>
