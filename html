@@ -3,15 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Basit Web Sayfası</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Knowin - Bilgi Paylaşım Platformu</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        header {
+            background-color: #007bff;
+            color: white;
+            text-align: center;
+            padding: 1em;
+        }
+        nav {
+            background-color: #333;
+            padding: 1em;
+        }
+        nav a {
+            color: white;
+            margin: 0 1em;
+            text-decoration: none;
+        }
+        .container {
+            max-width: 800px;
+            margin: 2em auto;
+            padding: 0 20px;
+        }
+    </style>
 </head>
 <body>
+    <header>
+        <h1>Knowin</h1>
+        <p>Bilgiyi Paylaş, Öğren, Büyü!</p>
+    </header>
+    <nav>
+        <a href="#home">Ana Sayfa</a>
+        <a href="#about">Hakkımızda</a>
+        <a href="#contact">İletişim</a>
+    </nav>
     <div class="container">
-        <h1>Merhaba Dünya!</h1>
-        <p id="message">Bu bir örnek web sayfasıdır.</p>
-        <button onclick="changeMessage()">Mesajı Değiştir</button>
+        <h2>Hoş Geldiniz!</h2>
+        <p>Knowin, bilgi paylaşımı ve öğrenme için bir platformdur. Burada herkes bir şeyler öğrenebilir ve paylaşabilir.</p>
     </div>
-    <script src="script.js"></script>
 </body>
 </html>
